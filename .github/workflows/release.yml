@@ -101,11 +101,11 @@ jobs:
             def install
               arch = Hardware::CPU.arm? ? "arm64" : "amd64"
               os = OS.mac? ? "darwin" : "linux"
-              bin.install "coda-\#{os}-\#{arch}" => "coda"
+              bin.install "coda-#{os}-#{arch}" => "coda"
             end
 
             test do
-              assert_match version.to_s, shell_output("\#{bin}/coda --version 2>&1")
+              assert_match version.to_s, shell_output("#{bin}/coda --version 2>&1")
             end
           end
           EOF
