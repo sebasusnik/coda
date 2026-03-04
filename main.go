@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/sebasusnik/coda/internal/auth"
 	"github.com/sebasusnik/coda/internal/client"
@@ -148,6 +149,17 @@ func main() {
 				Usage: "Show recently played tracks",
 				Action: func(c *cli.Context) error {
 					return client.RecentlyPlayed()
+				},
+			},
+			{
+				Name:      "addto",
+				Usage:     "Add the current track to a playlist",
+				ArgsUsage: "<playlist name>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() == 0 {
+						return fmt.Errorf("playlist name required")
+					}
+					return client.AddCurrentToPlaylist(strings.Join(c.Args().Slice(), " "))
 				},
 			},
 			{
@@ -300,6 +312,7 @@ func main() {
 								{"recent", "Show recently played tracks"},
 								{"liked", "Show your liked/saved tracks"},
 								{"add", "Add a track to the queue"},
+								{"addto", "Add the current track to a playlist"},
 								{"like", "Like the currently playing track"},
 								{"vol", "Set volume (0-100, up, down)"},
 								{"seek", "Seek to a position in the current track"},

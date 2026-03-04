@@ -1198,6 +1198,85 @@ func LikedTracks() error {
 	return nil
 }
 
+// AddCurrentToPlaylist finds a playlist by name and adds the currently playing
+// track to it. It tries an exact case-insensitive match first, then falls back
+// to a partial contains match.
+func AddCurrentToPlaylist(query string) error {
+	playback, err := GetPlaybackState()
+	if err != nil {
+		return err
+	}
+	if playback.Item.URI == "" {
+		return fmt.Errorf("nothing currently playing")
+	}
+
+	playlists, err := UserPlaylistsRaw(50)
+	if err != nil {
+		return err
+	}
+	if len(playlists) == 0 {
+		return fmt.Errorf("no playlists found")
+	}
+
+	q := strings.ToLower(query)
+	var matched *PlaylistItem
+	for i, p := range playlists {
+		if strings.ToLower(p.Name) == q {
+			matched = &playlists[i]
+			break
+		}
+	}
+	if matched == nil {
+		for i, p := range playlists {
+			if strings.Contains(strings.ToLower(p.Name), q) {
+				matched = &playlists[i]
+				break
+			}
+		}
+	}
+	if matched == nil {
+		return fmt.Errorf("no playlist matching %q", query)
+	}
+
+	body, _ := json.Marshal(map[string][]string{"uris": {playback.Item.URI}})
+	resp, err := makeSpotifyRequest("POST", "/playlists/"+matched.ID+"/tracks", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 && !isSuccess(resp.StatusCode) {
+		return fmt.Errorf("failed to add to playlist: %s", resp.Status)
+	}
+
+	ui.Successf("added \"%s\" to %s", playback.Item.Name, matched.Name)
+	return nil
+}
+
+type artistAlbumsResponse struct {
+	Items []AlbumItem `json:"items"`
+}
+
+// ArtistAlbumsRaw returns albums for the given artist ID without printing.
+func ArtistAlbumsRaw(artistID string) ([]AlbumItem, error) {
+	endpoint := fmt.Sprintf("/artists/%s/albums?include_groups=album,single&limit=9", artistID)
+	resp, err := makeSpotifyRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get artist albums: %s", resp.Status)
+	}
+
+	var result artistAlbumsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
 // AddToQueue adds a track URI to the user's playback queue.
 func AddToQueue(trackURI string) error {
 	endpoint := "/me/player/queue?uri=" + url.QueryEscape(trackURI)

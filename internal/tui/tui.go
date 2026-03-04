@@ -511,6 +511,49 @@ func execInput(input string) tea.Cmd {
 		return runAction(client.AlbumMode, "playing album")
 	case "radio":
 		return runAction(client.RadioMode, "radio started")
+	case "artist":
+		return func() tea.Msg {
+			playback, err := client.GetPlaybackState()
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(playback.Item.Artists) == 0 {
+				return cmdDoneMsg{"no artist info available"}
+			}
+			artist := playback.Item.Artists[0]
+			albums, err := client.ArtistAlbumsRaw(artist.ID)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(albums) == 0 {
+				return cmdDoneMsg{"no albums found for " + artist.Name}
+			}
+			results := make([]searchResult, len(albums))
+			for i, a := range albums {
+				artists := make([]string, len(a.Artists))
+				for j, ar := range a.Artists {
+					artists[j] = ar.Name
+				}
+				results[i] = searchResult{
+					kind:    kindAlbum,
+					name:    a.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: "spotify:album:" + a.ID,
+				}
+			}
+			return searchResultsMsg{results: results, query: artist.Name, label: "artist", mode: "play"}
+		}
+	case "addto":
+		if len(parts) < 2 {
+			return func() tea.Msg { return cmdDoneMsg{"addto: playlist name required"} }
+		}
+		name := strings.Join(parts[1:], " ")
+		return func() tea.Msg {
+			if err := silently(func() error { return client.AddCurrentToPlaylist(name) }); err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			return cmdDoneMsg{"added to " + name}
+		}
 	case "status":
 		return func() tea.Msg { return cmdDoneMsg{"status is shown in the player"} }
 	case "queue":
