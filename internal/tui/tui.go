@@ -606,6 +606,11 @@ func (m model) resultsView() string {
 
 	box := boxStyle.Render(strings.Join(rows, "\n"))
 
+	// Compact mode: terminal too short — just the results box
+	if m.height > 0 && m.height < 18 {
+		return "\n" + box + "\n"
+	}
+
 	var inputLine string
 	if m.commandMode {
 		inputLine = promptSt.Render(":") + " " + m.input + "▋"
@@ -677,7 +682,23 @@ func (m model) View() string {
 	}
 
 	if m.playback == nil {
-		return "\n  " + dim.Render("nothing playing") + "\n"
+		var inputLine string
+		if m.commandMode {
+			inputLine = promptSt.Render(":") + " " + m.input + "▋"
+		} else {
+			inputLine = dim.Render("press : to type a command")
+		}
+		statusLine := ""
+		if m.status != "" {
+			if strings.HasPrefix(m.status, "error") {
+				statusLine = "\n  " + errorSt.Render(m.status)
+			} else {
+				statusLine = "\n  " + successSt.Render(m.status)
+			}
+		}
+		idle := boxStyle.Render(dim.Render("nothing playing"))
+		help := dim.Render("search · recent · : command · q quit")
+		return "\n" + idle + "\n\n  " + inputLine + statusLine + "\n\n  " + help + "\n"
 	}
 
 	pb := m.playback
@@ -739,6 +760,11 @@ func (m model) View() string {
 	}, "\n")
 
 	box := boxStyle.Render(content)
+
+	// Compact mode: terminal too short to show chrome — just the player box
+	if m.height > 0 && m.height < 18 {
+		return "\n" + box + "\n"
+	}
 
 	// Input line — ':' prefix in command mode, hint in normal mode
 	var inputLine string
