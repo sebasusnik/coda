@@ -61,6 +61,7 @@ type searchResultsMsg struct {
 	results []searchResult
 	query   string
 	label   string // header label, e.g. "search" or "queue"
+	mode    string // "play" or "add"
 }
 
 // --- search result type ---
@@ -92,7 +93,8 @@ type model struct {
 	height        int
 	results       []searchResult
 	resultsQuery  string
-	resultsLabel  string // "search" or "queue"
+	resultsLabel  string // "search", "queue", or "add"
+	resultsMode   string // "play" or "add"
 	showResults   bool
 	resultsOffset int // index of first visible result
 }
@@ -197,6 +199,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.results = msg.results
 		m.resultsQuery = msg.query
 		m.resultsLabel = msg.label
+		m.resultsMode = msg.mode
 		m.showResults = true
 		m.resultsOffset = 0
 		m.status = ""
@@ -263,6 +266,9 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// key 1-9 maps to offset + (key-1)
 				idx := m.resultsOffset + int(k[0]-'1')
 				if idx < len(m.results) {
+					if m.resultsMode == "add" {
+						return m, addResult(m.results[idx])
+					}
 					return m, playResult(m.results[idx])
 				}
 			}
@@ -310,6 +316,15 @@ func playResult(r searchResult) tea.Cmd {
 	}
 }
 
+func addResult(r searchResult) tea.Cmd {
+	return func() tea.Msg {
+		if err := client.AddToQueue(r.playURI); err != nil {
+			return cmdDoneMsg{"error: " + err.Error()}
+		}
+		return cmdDoneMsg{"queued: " + r.name}
+	}
+}
+
 func doSearch(kind, query string) tea.Cmd {
 	return func() tea.Msg {
 		switch kind {
@@ -331,7 +346,7 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: "spotify:album:" + a.ID,
 				}
 			}
-			return searchResultsMsg{results: results, query: query, label: "search"}
+			return searchResultsMsg{results: results, query: query, label: "search", mode: "play"}
 
 		case "playlist":
 			items, err := client.SearchPlaylistsRaw(query)
@@ -347,7 +362,7 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: "spotify:playlist:" + p.ID,
 				}
 			}
-			return searchResultsMsg{results: results, query: query, label: "search"}
+			return searchResultsMsg{results: results, query: query, label: "search", mode: "play"}
 
 		default: // tracks
 			items, err := client.SearchTracksRaw(query)
@@ -367,7 +382,7 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: t.URI,
 				}
 			}
-			return searchResultsMsg{results: results, query: query, label: "search"}
+			return searchResultsMsg{results: results, query: query, label: "search", mode: "play"}
 		}
 	}
 }
@@ -434,6 +449,34 @@ func execInput(input string) tea.Cmd {
 		return func() tea.Msg { return cmdDoneMsg{"status is shown in the player"} }
 	case "queue":
 		return fetchQueue()
+	case "add":
+		if len(parts) < 2 {
+			return func() tea.Msg { return cmdDoneMsg{"add: query required"} }
+		}
+		query := strings.Join(parts[1:], " ")
+		return func() tea.Msg {
+			items, err := client.SearchTracksRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no tracks found"}
+			}
+			results := make([]searchResult, len(items))
+			for i, t := range items {
+				artists := make([]string, len(t.Artists))
+				for j, a := range t.Artists {
+					artists[j] = a.Name
+				}
+				results[i] = searchResult{
+					kind:    kindTrack,
+					name:    t.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: t.URI,
+				}
+			}
+			return searchResultsMsg{results: results, query: query, label: "add to queue", mode: "add"}
+		}
 	case "search":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
@@ -555,9 +598,13 @@ func (m model) resultsView() string {
 		}
 	}
 
-	helpStr := "1-9 play · esc back · : command · q quit"
+	action := "play"
+	if m.resultsMode == "add" {
+		action = "queue"
+	}
+	helpStr := fmt.Sprintf("1-9 %s · esc back · : command · q quit", action)
 	if len(m.results) > visible {
-		helpStr = "1-9 play · ↑↓ scroll · esc back · : command · q quit"
+		helpStr = fmt.Sprintf("1-9 %s · ↑↓ scroll · esc back · : command · q quit", action)
 	}
 	help := dim.Render(helpStr)
 	return "\n" + box + "\n\n  " + inputLine + statusLine + "\n\n  " + help + "\n"

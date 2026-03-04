@@ -138,6 +138,17 @@ func main() {
 				},
 			},
 			{
+				Name:      "add",
+				Usage:     "Add a track to the queue",
+				ArgsUsage: "<query>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() == 0 {
+						return fmt.Errorf("search query required")
+					}
+					return client.AddFirstToQueue(c.Args().First())
+				},
+			},
+			{
 				Name:  "like",
 				Usage: "Like the currently playing track",
 				Action: func(c *cli.Context) error {

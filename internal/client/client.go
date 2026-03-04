@@ -1005,6 +1005,41 @@ func SearchPlaylistsRaw(query string) ([]PlaylistItem, error) {
 	return sr.Playlists.Items, nil
 }
 
+// AddToQueue adds a track URI to the user's playback queue.
+func AddToQueue(trackURI string) error {
+	endpoint := "/me/player/queue?uri=" + url.QueryEscape(trackURI)
+	resp, err := makeSpotifyRequest("POST", endpoint, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("no active Spotify device found")
+	}
+	if !isSuccess(resp.StatusCode) {
+		return fmt.Errorf("failed to add to queue: %s", resp.Status)
+	}
+	return nil
+}
+
+// AddFirstToQueue searches for query and adds the top track result to the queue.
+func AddFirstToQueue(query string) error {
+	tracks, err := SearchTracksRaw(query)
+	if err != nil {
+		return err
+	}
+	if len(tracks) == 0 {
+		return fmt.Errorf("no tracks found for %q", query)
+	}
+	track := tracks[0]
+	if err := AddToQueue(track.URI); err != nil {
+		return err
+	}
+	ui.Successf("queued: %s — %s", artistNames(track.Artists), track.Name)
+	return nil
+}
+
 // QueueRaw returns the currently playing track and queue without printing.
 func QueueRaw() (Track, []Track, error) {
 	resp, err := makeSpotifyRequest("GET", "/me/player/queue", nil)
