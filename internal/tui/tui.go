@@ -37,10 +37,10 @@ var (
 			BorderForeground(lipgloss.Color(cSurface2)).
 			Padding(1, 3)
 
-	tightBoxStyle = lipgloss.NewStyle().
+	compactBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(cSurface2)).
-			Padding(0, 2)
+			Padding(0, 3)
 
 	trackStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cMauve))
 	artistStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cLavender))
@@ -757,30 +757,19 @@ func (m model) View() string {
 
 	compact := m.height > 0 && m.height < 18
 
-	var content string
-	if compact {
-		content = strings.Join([]string{
-			trackStyle.Render(pb.Item.Name),
-			artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
-			stateStr,
-			bar + "  " + dim.Render(timeStr),
-			dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
-		}, "\n")
-	} else {
-		content = strings.Join([]string{
-			trackStyle.Render(pb.Item.Name),
-			artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
-			stateStr,
-			"",
-			bar + "  " + dim.Render(timeStr),
-			dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
-		}, "\n")
-	}
+	content := strings.Join([]string{
+		trackStyle.Render(pb.Item.Name),
+		artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
+		stateStr,
+		"",
+		bar + "  " + dim.Render(timeStr),
+		dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
+	}, "\n")
 
 	var box string
 	if compact {
-		box = tightBoxStyle.Render(content)
-		return box + "\n"
+		box = compactBoxStyle.Render(content)
+		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Center, box)
 	}
 	box = boxStyle.Render(content)
 
