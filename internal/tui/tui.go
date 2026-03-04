@@ -42,11 +42,12 @@ type cmdDoneMsg struct{ text string }
 // --- model ---
 
 type model struct {
-	playback *client.PlaybackState
-	input    string
-	status   string
-	loading  bool
-	width    int
+	playback    *client.PlaybackState
+	input       string
+	status      string
+	loading     bool
+	commandMode bool // true when the user pressed ':' to type a command
+	width       int
 }
 
 func initialModel() model {
@@ -152,23 +153,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// ctrl+c always quits
+	// ctrl+c always quits regardless of mode
 	if msg.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
 
-	// If there's text in the input field, handle typing
-	if len(m.input) > 0 {
+	// Command mode: typing a command after pressing ':'
+	if m.commandMode {
 		switch msg.String() {
 		case "enter":
 			cmd := strings.TrimSpace(m.input)
 			m.input = ""
+			m.commandMode = false
 			return m, execInput(cmd)
 		case "esc":
 			m.input = ""
 			m.status = ""
+			m.commandMode = false
 		case "backspace":
-			m.input = m.input[:len(m.input)-1]
+			if len(m.input) > 0 {
+				m.input = m.input[:len(m.input)-1]
+			}
 		default:
 			if len(msg.String()) == 1 {
 				m.input += msg.String()
@@ -177,7 +182,7 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Input empty: single-key shortcuts
+	// Normal mode: single-key shortcuts
 	switch msg.String() {
 	case "q":
 		return m, tea.Quit
@@ -193,12 +198,10 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, runAction(client.ToggleShuffle, "shuffle toggled")
 	case "r":
 		return m, runAction(client.CycleRepeat, "repeat cycled")
-	case "backspace":
-		// ignore
-	default:
-		if len(msg.String()) == 1 {
-			m.input += msg.String()
-		}
+	case ":":
+		m.commandMode = true
+		m.input = ""
+		m.status = ""
 	}
 
 	return m, nil
@@ -228,6 +231,10 @@ func execInput(input string) tea.Cmd {
 		return runAction(client.ToggleShuffle, "shuffle toggled")
 	case "repeat", "r":
 		return runAction(client.CycleRepeat, "repeat cycled")
+	case "album":
+		return runAction(client.AlbumMode, "playing album")
+	case "radio":
+		return runAction(client.RadioMode, "radio started")
 	case "vol":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"vol: argument required (0-100, up, down)"} }
@@ -334,8 +341,13 @@ func (m model) View() string {
 
 	box := boxStyle.Render(content)
 
-	// Input line
-	inputLine := boldGreen.Render(">") + " " + m.input + "▋"
+	// Input line — ':' prefix in command mode, hint in normal mode
+	var inputLine string
+	if m.commandMode {
+		inputLine = boldGreen.Render(":") + " " + m.input + "▋"
+	} else {
+		inputLine = dim.Render("press : to type a command")
+	}
 
 	// Status line (only shown when non-empty)
 	statusLine := ""
@@ -343,7 +355,7 @@ func (m model) View() string {
 		statusLine = "\n  " + dim.Render(m.status)
 	}
 
-	help := dim.Render("spc toggle · n next · p prev · l like · s shuffle · r repeat · q quit")
+	help := dim.Render("spc toggle · n next · p prev · l like · s shuffle · r repeat · : command · q quit")
 
 	return "\n" + box + "\n\n  " + inputLine + statusLine + "\n\n  " + help + "\n"
 }

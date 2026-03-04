@@ -132,7 +132,7 @@ func SearchTracks(query string, playFirst bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Spotify API error: %s", resp.Status)
+		return fmt.Errorf("spotify API error: %s", resp.Status)
 	}
 
 	var searchResp SearchResponse
@@ -818,7 +818,7 @@ func SearchAlbums(query string, playFirst bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Spotify API error: %s", resp.Status)
+		return fmt.Errorf("spotify API error: %s", resp.Status)
 	}
 
 	var searchResp albumSearchResponse
@@ -881,7 +881,7 @@ func SearchPlaylists(query string, playFirst bool) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Spotify API error: %s", resp.Status)
+		return fmt.Errorf("spotify API error: %s", resp.Status)
 	}
 
 	var searchResp playlistSearchResponse
