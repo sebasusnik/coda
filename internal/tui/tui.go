@@ -23,7 +23,7 @@ var (
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1)
+			Padding(1, 3)
 
 	boldCyan  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
 	boldGreen = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
@@ -300,14 +300,13 @@ func (m model) View() string {
 		progress = pb.Item.DurationMs
 	}
 
-	// Inner content width: terminal width minus box borders/padding
-	// Box adds 2 (borders) + 2 (padding each side) = 6 chars overhead
-	innerWidth := m.width - 6
-	if innerWidth < 20 {
-		innerWidth = 20
+	// Inner content width: terminal width minus box borders (2) + padding (6 each side = 12) = 14
+	innerWidth := m.width - 14
+	if innerWidth < 30 {
+		innerWidth = 30
 	}
-	if innerWidth > 60 {
-		innerWidth = 60
+	if innerWidth > 80 {
+		innerWidth = 80
 	}
 
 	// State indicator
