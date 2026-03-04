@@ -37,6 +37,11 @@ var (
 			BorderForeground(lipgloss.Color(cSurface2)).
 			Padding(1, 3)
 
+	tightBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(cSurface2)).
+			Padding(0, 2)
+
 	trackStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cMauve))
 	artistStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cLavender))
 	albumStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
@@ -750,21 +755,34 @@ func (m model) View() string {
 	filled, empty := progressBar(progress, pb.Item.DurationMs, barWidth)
 	bar := barOn.Render(strings.Repeat("█", filled)) + barOff.Render(strings.Repeat("░", empty))
 
-	content := strings.Join([]string{
-		trackStyle.Render(pb.Item.Name),
-		artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
-		stateStr,
-		"",
-		bar + "  " + dim.Render(timeStr),
-		dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
-	}, "\n")
+	compact := m.height > 0 && m.height < 18
 
-	box := boxStyle.Render(content)
-
-	// Compact mode: terminal too short to show chrome — just the player box
-	if m.height > 0 && m.height < 18 {
-		return "\n" + box + "\n"
+	var content string
+	if compact {
+		content = strings.Join([]string{
+			trackStyle.Render(pb.Item.Name),
+			artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
+			stateStr,
+			bar + "  " + dim.Render(timeStr),
+			dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
+		}, "\n")
+	} else {
+		content = strings.Join([]string{
+			trackStyle.Render(pb.Item.Name),
+			artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
+			stateStr,
+			"",
+			bar + "  " + dim.Render(timeStr),
+			dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
+		}, "\n")
 	}
+
+	var box string
+	if compact {
+		box = tightBoxStyle.Render(content)
+		return box + "\n"
+	}
+	box = boxStyle.Render(content)
 
 	// Input line — ':' prefix in command mode, hint in normal mode
 	var inputLine string
