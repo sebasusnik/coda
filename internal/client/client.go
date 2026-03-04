@@ -697,7 +697,8 @@ func Like() error {
 		return fmt.Errorf("could not read current track")
 	}
 
-	likeResp, err := makeSpotifyRequest("PUT", "/me/tracks?ids="+current.Item.ID, nil)
+	likeBody, _ := json.Marshal(map[string][]string{"ids": {current.Item.ID}})
+	likeResp, err := makeSpotifyRequest("PUT", "/me/tracks", likeBody)
 	if err != nil {
 		return err
 	}
@@ -755,6 +756,67 @@ func SetVolume(input string) error {
 	}
 
 	ui.Volume(target)
+	return nil
+}
+
+func formatMs(ms int) string {
+	secs := ms / 1000
+	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
+}
+
+func Seek(input string) error {
+	playback, err := GetPlaybackState()
+	if err != nil {
+		return err
+	}
+
+	progressMs := playback.Progress
+	durationMs := playback.Item.DurationMs
+
+	var targetMs int
+	if strings.HasPrefix(input, "+") {
+		n, err := strconv.Atoi(input[1:])
+		if err != nil {
+			return fmt.Errorf("invalid seek argument: %s", input)
+		}
+		targetMs = progressMs + n*1000
+	} else if strings.HasPrefix(input, "-") {
+		n, err := strconv.Atoi(input[1:])
+		if err != nil {
+			return fmt.Errorf("invalid seek argument: %s", input)
+		}
+		targetMs = progressMs - n*1000
+	} else {
+		n, err := strconv.Atoi(input)
+		if err != nil {
+			return fmt.Errorf("invalid seek argument: %s", input)
+		}
+		targetMs = n * 1000
+	}
+
+	if targetMs < 0 {
+		targetMs = 0
+	}
+	if targetMs > durationMs {
+		targetMs = durationMs
+	}
+
+	endpoint := fmt.Sprintf("/me/player/seek?position_ms=%d", targetMs)
+	if playback.Device.ID != "" {
+		endpoint += "&device_id=" + playback.Device.ID
+	}
+
+	seekResp, err := makeSpotifyRequest("PUT", endpoint, nil)
+	if err != nil {
+		return err
+	}
+	defer seekResp.Body.Close()
+
+	if !isSuccess(seekResp.StatusCode) {
+		return fmt.Errorf("failed to seek: %s", seekResp.Status)
+	}
+
+	ui.Successf("seeked to %s", formatMs(targetMs))
 	return nil
 }
 
@@ -1023,6 +1085,29 @@ func SearchPlaylistsRaw(query string) ([]PlaylistItem, error) {
 	return sr.Playlists.Items, nil
 }
 
+type userPlaylistsResponse struct {
+	Items []PlaylistItem `json:"items"`
+}
+
+// UserPlaylistsRaw returns the current user's saved playlists without printing.
+func UserPlaylistsRaw(limit int) ([]PlaylistItem, error) {
+	resp, err := makeSpotifyRequest("GET", fmt.Sprintf("/me/playlists?limit=%d", limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get playlists: %s", resp.Status)
+	}
+
+	var result userPlaylistsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
 type RecentlyPlayedItem struct {
 	Track    Track  `json:"track"`
 	PlayedAt string `json:"played_at"`
@@ -1062,6 +1147,51 @@ func RecentlyPlayed() error {
 		return nil
 	}
 	ui.Header(fmt.Sprintf("recently played (%d)", len(items)))
+	for i, item := range items {
+		ui.Track(i+1, artistNames(item.Track.Artists), item.Track.Name, item.Track.Album.Name)
+	}
+	return nil
+}
+
+type SavedTrackItem struct {
+	AddedAt string `json:"added_at"`
+	Track   Track  `json:"track"`
+}
+
+type savedTracksResponse struct {
+	Items []SavedTrackItem `json:"items"`
+}
+
+// LikedTracksRaw returns saved/liked tracks without printing.
+func LikedTracksRaw(limit int) ([]SavedTrackItem, error) {
+	resp, err := makeSpotifyRequest("GET", fmt.Sprintf("/me/tracks?limit=%d", limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get liked tracks: %s", resp.Status)
+	}
+
+	var result savedTracksResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+// LikedTracks prints the user's saved tracks.
+func LikedTracks() error {
+	items, err := LikedTracksRaw(10)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		ui.Info("no liked tracks")
+		return nil
+	}
+	ui.Header(fmt.Sprintf("liked tracks (%d)", len(items)))
 	for i, item := range items {
 		ui.Track(i+1, artistNames(item.Track.Artists), item.Track.Name, item.Track.Album.Name)
 	}

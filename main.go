@@ -21,8 +21,9 @@ var (
 
 func main() {
 	app := &cli.App{
-		Usage:   "Spotify CLI controller",
-		Version: fmt.Sprintf("%s (%s) built %s", version, commit, buildTime),
+		Usage:                "Spotify CLI controller",
+		Version:              fmt.Sprintf("%s (%s) built %s", version, commit, buildTime),
+		EnableBashCompletion: true,
 		Commands: []*cli.Command{
 			{
 				Name:  "auth",
@@ -32,9 +33,14 @@ func main() {
 						Name:  "headless",
 						Usage: "Use headless authentication",
 					},
+					&cli.BoolFlag{
+						Name:    "force",
+						Aliases: []string{"f"},
+						Usage:   "Force re-authentication even if already authenticated",
+					},
 				},
 				Action: func(c *cli.Context) error {
-					return auth.Authenticate(c.Bool("headless"))
+					return auth.Authenticate(c.Bool("headless"), c.Bool("force"))
 				},
 			},
 			{
@@ -145,6 +151,13 @@ func main() {
 				},
 			},
 			{
+				Name:  "liked",
+				Usage: "Show your liked/saved tracks",
+				Action: func(c *cli.Context) error {
+					return client.LikedTracks()
+				},
+			},
+			{
 				Name:      "add",
 				Usage:     "Add a track to the queue",
 				ArgsUsage: "<query>",
@@ -171,6 +184,17 @@ func main() {
 						return fmt.Errorf("volume argument required (0-100, up, or down)")
 					}
 					return client.SetVolume(c.Args().First())
+				},
+			},
+			{
+				Name:      "seek",
+				Usage:     "Seek to a position in the current track",
+				ArgsUsage: "<seconds>",
+				Action: func(c *cli.Context) error {
+					if c.NArg() == 0 {
+						return fmt.Errorf("position argument required (seconds, +N, or -N)")
+					}
+					return client.Seek(c.Args().First())
 				},
 			},
 			{
@@ -231,6 +255,68 @@ func main() {
 						Usage: "Set the preferred Spotify Connect device",
 						Action: func(c *cli.Context) error {
 							return device.Use(c.Args().First())
+						},
+					},
+				},
+			},
+			{
+				Name:  "completion",
+				Usage: "Print shell completion script",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "bash",
+						Usage: "Print bash completion setup",
+						Action: func(c *cli.Context) error {
+							fmt.Println("# Add to ~/.bashrc or ~/.bash_profile:")
+							fmt.Println("complete -o nospace -C coda coda")
+							return nil
+						},
+					},
+					{
+						Name:  "zsh",
+						Usage: "Print zsh completion setup",
+						Action: func(c *cli.Context) error {
+							fmt.Println("# Add to ~/.zshrc:")
+							fmt.Println("autoload -U +X bashcompinit && bashcompinit")
+							fmt.Println("complete -o nospace -C coda coda")
+							return nil
+						},
+					},
+					{
+						Name:  "fish",
+						Usage: "Print fish completion setup",
+						Action: func(c *cli.Context) error {
+							fmt.Println("# Save to ~/.config/fish/completions/coda.fish")
+							cmds := []struct{ name, desc string }{
+								{"auth", "Authenticate with Spotify"},
+								{"search", "Search for tracks, albums, or playlists"},
+								{"play", "Resume playback or play track by number"},
+								{"pause", "Pause playback"},
+								{"toggle", "Toggle play/pause"},
+								{"next", "Skip to next track"},
+								{"prev", "Go to previous track"},
+								{"status", "Show current playback status"},
+								{"queue", "Show the current playback queue"},
+								{"recent", "Show recently played tracks"},
+								{"liked", "Show your liked/saved tracks"},
+								{"add", "Add a track to the queue"},
+								{"like", "Like the currently playing track"},
+								{"vol", "Set volume (0-100, up, down)"},
+								{"seek", "Seek to a position in the current track"},
+								{"shuffle", "Toggle shuffle"},
+								{"repeat", "Cycle repeat mode"},
+								{"radio", "Start radio mode based on current track"},
+								{"album", "Play entire album of current track"},
+								{"ui", "Start the interactive player UI"},
+								{"device", "Device management"},
+								{"completion", "Print shell completion script"},
+								{"install", "Install coda to /usr/local/bin"},
+							}
+							fmt.Println("complete -c coda -f")
+							for _, cmd := range cmds {
+								fmt.Printf("complete -c coda -n '__fish_use_subcommand' -a '%s' -d '%s'\n", cmd.name, cmd.desc)
+							}
+							return nil
 						},
 					},
 				},

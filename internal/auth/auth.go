@@ -52,19 +52,23 @@ func init() {
 			"streaming",
 			"playlist-read-private",
 			"playlist-read-collaborative",
+			"user-library-modify",
+			"user-library-read",
 		},
 		Endpoint: spotify.Endpoint,
 	}
 }
 
-func Authenticate(headless bool) error {
+func Authenticate(headless, force bool) error {
 	// Check if already authenticated
-	cfg, err := config.Load()
-	if err == nil && cfg.AccessToken != "" && cfg.RefreshToken != "" {
-		// Try to refresh token
-		if err := refreshToken(); err == nil {
-			fmt.Println("✓ Already authenticated")
-			return nil
+	if !force {
+		cfg, err := config.Load()
+		if err == nil && cfg.AccessToken != "" && cfg.RefreshToken != "" {
+			// Try to refresh token
+			if err := refreshToken(); err == nil {
+				fmt.Println("✓ Already authenticated")
+				return nil
+			}
 		}
 	}
 
@@ -89,7 +93,13 @@ func Authenticate(headless bool) error {
 	}
 	state = base64.URLEncoding.EncodeToString(b)
 
-	authURL := oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	authURLOpts := []oauth2.AuthCodeOption{oauth2.AccessTypeOffline}
+	if force {
+		// show_dialog=true forces Spotify to re-present the consent screen,
+		// ensuring new scopes are actually granted rather than silently skipped.
+		authURLOpts = append(authURLOpts, oauth2.SetAuthURLParam("show_dialog", "true"))
+	}
+	authURL := oauthConfig.AuthCodeURL(state, authURLOpts...)
 
 	if headless {
 		fmt.Printf("Visit this URL to authorize the application:\n%s\n", authURL)

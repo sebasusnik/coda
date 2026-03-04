@@ -150,7 +150,26 @@ func Use(name string) error {
 		return fmt.Errorf("failed to save preferred device: %v", err)
 	}
 
-	ui.Successf("preferred device set to \"%s\"", matched.Name)
+	// Transfer playback to the selected device
+	token, err := auth.GetValidToken()
+	if err != nil {
+		return err
+	}
+	transferBody, _ := json.Marshal(map[string]interface{}{
+		"device_ids": []string{matched.ID},
+		"play":       true,
+	})
+	transferResp, err := makeRequest(token, "PUT", "/me/player", transferBody)
+	if err != nil {
+		return fmt.Errorf("preferred device saved but failed to transfer playback: %v", err)
+	}
+	defer transferResp.Body.Close()
+
+	if transferResp.StatusCode >= 300 {
+		return fmt.Errorf("preferred device saved but transfer failed: %s", transferResp.Status)
+	}
+
+	ui.Successf("switched to \"%s\"", matched.Name)
 	return nil
 }
 

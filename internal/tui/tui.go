@@ -271,6 +271,8 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// key 1-9 maps to offset + (key-1)
 				idx := m.resultsOffset + int(k[0]-'1')
 				if idx < len(m.results) {
+					m.showResults = false
+					m.resultsOffset = 0
 					if m.resultsMode == "add" {
 						return m, addResult(m.results[idx])
 					}
@@ -297,6 +299,20 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, runAction(client.ToggleShuffle, "shuffle toggled")
 	case "r":
 		return m, runAction(client.CycleRepeat, "repeat cycled")
+	case "<":
+		return m, func() tea.Msg {
+			if err := silently(func() error { return client.Seek("-10") }); err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			return cmdDoneMsg{"seek -10s"}
+		}
+	case ">":
+		return m, func() tea.Msg {
+			if err := silently(func() error { return client.Seek("+10") }); err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			return cmdDoneMsg{"seek +10s"}
+		}
 	case ":":
 		m.commandMode = true
 		m.input = ""
@@ -499,6 +515,50 @@ func execInput(input string) tea.Cmd {
 		return func() tea.Msg { return cmdDoneMsg{"status is shown in the player"} }
 	case "queue":
 		return fetchQueue()
+	case "liked":
+		return func() tea.Msg {
+			items, err := client.LikedTracksRaw(9)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no liked tracks"}
+			}
+			results := make([]searchResult, len(items))
+			for i, item := range items {
+				artists := make([]string, len(item.Track.Artists))
+				for j, a := range item.Track.Artists {
+					artists[j] = a.Name
+				}
+				results[i] = searchResult{
+					kind:    kindTrack,
+					name:    item.Track.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: item.Track.URI,
+				}
+			}
+			return searchResultsMsg{results: results, query: "", label: "liked", mode: "play"}
+		}
+	case "playlists":
+		return func() tea.Msg {
+			items, err := client.UserPlaylistsRaw(9)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no playlists found"}
+			}
+			results := make([]searchResult, len(items))
+			for i, p := range items {
+				results[i] = searchResult{
+					kind:    kindPlaylist,
+					name:    p.Name,
+					sub:     p.Owner.DisplayName,
+					playURI: "spotify:playlist:" + p.ID,
+				}
+			}
+			return searchResultsMsg{results: results, query: "", label: "playlists", mode: "play"}
+		}
 	case "recent":
 		return func() tea.Msg {
 			items, err := client.RecentlyPlayedRaw(9)
@@ -588,6 +648,17 @@ func execInput(input string) tea.Cmd {
 				return cmdDoneMsg{"error: " + err.Error()}
 			}
 			return cmdDoneMsg{"vol " + arg}
+		}
+	case "seek":
+		if len(parts) < 2 {
+			return func() tea.Msg { return cmdDoneMsg{"seek: argument required (seconds, +N, -N)"} }
+		}
+		arg := parts[1]
+		return func() tea.Msg {
+			if err := silently(func() error { return client.Seek(arg) }); err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			return cmdDoneMsg{"seeked"}
 		}
 	default:
 		return func() tea.Msg { return cmdDoneMsg{"unknown: " + parts[0]} }
