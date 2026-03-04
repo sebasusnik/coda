@@ -422,6 +422,51 @@ func fetchQueue() tea.Cmd {
 	}
 }
 
+func doSearchAndPlayFirst(kind, query string) tea.Cmd {
+	return func() tea.Msg {
+		var r searchResult
+		switch kind {
+		case "album":
+			items, err := client.SearchAlbumsRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no results found"}
+			}
+			r = searchResult{kind: kindAlbum, name: items[0].Name, playURI: "spotify:album:" + items[0].ID}
+		case "playlist":
+			items, err := client.SearchPlaylistsRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no results found"}
+			}
+			r = searchResult{kind: kindPlaylist, name: items[0].Name, playURI: "spotify:playlist:" + items[0].ID}
+		default:
+			items, err := client.SearchTracksRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no results found"}
+			}
+			r = searchResult{kind: kindTrack, name: items[0].Name, playURI: items[0].URI}
+		}
+		var err error
+		if r.kind == kindTrack {
+			err = client.PlayURI(r.playURI)
+		} else {
+			err = client.PlayContextURI(r.playURI)
+		}
+		if err != nil {
+			return cmdDoneMsg{"error: " + err.Error()}
+		}
+		return cmdDoneMsg{"playing: " + r.name}
+	}
+}
+
 func execInput(input string) tea.Cmd {
 	if input == "" {
 		return nil
@@ -511,6 +556,7 @@ func execInput(input string) tea.Cmd {
 			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
 		}
 		kind := "track"
+		playFirst := false
 		var queryParts []string
 		for _, p := range parts[1:] {
 			switch p {
@@ -518,6 +564,8 @@ func execInput(input string) tea.Cmd {
 				kind = "album"
 			case "-pl":
 				kind = "playlist"
+			case "-p":
+				playFirst = true
 			default:
 				queryParts = append(queryParts, p)
 			}
@@ -525,7 +573,11 @@ func execInput(input string) tea.Cmd {
 		if len(queryParts) == 0 {
 			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
 		}
-		return doSearch(kind, strings.Join(queryParts, " "))
+		query := strings.Join(queryParts, " ")
+		if playFirst {
+			return doSearchAndPlayFirst(kind, query)
+		}
+		return doSearch(kind, query)
 	case "vol":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"vol: argument required (0-100, up, down)"} }
