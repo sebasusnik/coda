@@ -77,7 +77,7 @@ That's it. You're ready to use coda.
 ### Playback
 
 ```bash
-coda play                          # resume playback
+coda play                          # resume playback (or play last track if nothing is active)
 coda play 1                        # play track by number from last search
 coda pause                         # pause playback
 coda toggle                        # toggle play/pause
@@ -85,8 +85,10 @@ coda next                          # skip to next track
 coda prev                          # go to previous track
 coda status                        # show what's currently playing
 coda queue                         # show the current playback queue
+coda recent                        # show recently played tracks
 coda radio                         # start radio based on current track
 coda album                         # play the full album of the current track
+coda add "song name"               # add a track to the queue (plays first match)
 ```
 
 ### Search
@@ -127,6 +129,42 @@ coda device use                    # interactively select a preferred device
 coda device use "my-machine"       # set a specific device by name
 ```
 
+### Interactive UI
+
+```bash
+coda ui                            # open the interactive TUI player
+```
+
+The TUI shows the current track, progress bar, volume, shuffle and repeat state. It updates live and adapts to the terminal window size.
+
+**Keyboard shortcuts** (normal mode):
+
+| Key | Action |
+|-----|--------|
+| `space` | toggle play/pause |
+| `n` | next track |
+| `p` | previous track |
+| `l` | like current track |
+| `s` | toggle shuffle |
+| `r` | cycle repeat mode |
+| `q` | quit |
+| `:` | enter command mode |
+
+**Commands** (type `:` then a command and press enter):
+
+```
+toggle / pause / play
+next / n  ·  prev / p
+like / l  ·  shuffle / s  ·  repeat / r
+vol <n|up|down>
+album  ·  radio
+search [-a|-pl] [-p] <query>       # -p plays first result immediately
+add <query>                        # add first matching track to queue
+recent                             # browse recently played tracks
+queue                              # browse the current playback queue
+quit / q
+```
+
 ### Setup
 
 ```bash
@@ -147,6 +185,12 @@ coda search -p "pink floyd comfortably numb"
 coda search "necrophagist"
 coda play 1
 
+# Nothing playing? coda play starts from your last track
+coda play
+
+# Add to queue without interrupting what's playing
+coda add "master of puppets"
+
 # Browse albums and pick
 coda search -a "pink floyd"
 coda play                          # resumes if something was already queued
@@ -159,6 +203,9 @@ coda radio
 
 # Play the full album
 coda album
+
+# See what you've been listening to
+coda recent
 
 # Like what's playing and set a comfortable volume
 coda like
@@ -174,6 +221,9 @@ coda queue
 
 # Switch to a different device
 coda device use
+
+# Open the interactive player
+coda ui
 ```
 
 ---

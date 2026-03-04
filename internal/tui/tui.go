@@ -480,7 +480,7 @@ func execInput(input string) tea.Cmd {
 	case "pause":
 		return runAction(client.Pause, "paused")
 	case "play":
-		return runAction(client.Resume, "playing")
+		return runAction(client.SmartResume, "playing")
 	case "next", "n":
 		return runAction(client.Next, "→ next")
 	case "prev", "p":
