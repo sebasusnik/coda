@@ -757,10 +757,17 @@ func (m model) View() string {
 
 	compact := m.height > 0 && m.height < 18
 
+	// Track name left, state indicator right-aligned on the same line
+	trackRendered := trackStyle.Render(pb.Item.Name)
+	pad := innerWidth - lipgloss.Width(trackRendered) - lipgloss.Width(stateStr)
+	if pad < 1 {
+		pad = 1
+	}
+	trackLine := trackRendered + strings.Repeat(" ", pad) + stateStr
+
 	content := strings.Join([]string{
-		trackStyle.Render(pb.Item.Name),
+		trackLine,
 		artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
-		stateStr,
 		"",
 		bar + "  " + dim.Render(timeStr),
 		dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
