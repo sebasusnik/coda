@@ -612,7 +612,7 @@ func (m model) resultsView() string {
 	box := boxStyle.Render(strings.Join(rows, "\n"))
 
 	// Compact mode: terminal too short — just the results box
-	if m.height > 0 && m.height < 18 {
+	if m.height > 0 && m.height < 16 {
 		return "\n" + box + "\n"
 	}
 
@@ -755,7 +755,7 @@ func (m model) View() string {
 	filled, empty := progressBar(progress, pb.Item.DurationMs, barWidth)
 	bar := barOn.Render(strings.Repeat("█", filled)) + barOff.Render(strings.Repeat("░", empty))
 
-	compact := m.height > 0 && m.height < 18
+	compact := m.height > 0 && m.height < 16
 
 	// Track name left, state indicator right-aligned on the same line
 	trackRendered := trackStyle.Render(pb.Item.Name)
