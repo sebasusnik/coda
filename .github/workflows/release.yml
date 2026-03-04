@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # needed for git describe --tags in Makefile
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: make cross-compile
+
+      - name: Generate checksums
+        run: sha256sum coda-* > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            coda-linux-amd64
+            coda-linux-arm64
+            coda-darwin-amd64
+            coda-darwin-arm64
+            coda-windows-amd64.exe
+            checksums.txt
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: sebasusnik/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Update formula
+        env:
+          VERSION: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${VERSION#v}"
+
+          gh release download "$VERSION" \
+            --repo sebasusnik/coda \
+            --pattern checksums.txt \
+            --output checksums.txt
+
+          SHA_DARWIN_ARM64=$(grep "coda-darwin-arm64$" checksums.txt | awk '{print $1}')
+          SHA_DARWIN_AMD64=$(grep "coda-darwin-amd64$" checksums.txt | awk '{print $1}')
+          SHA_LINUX_ARM64=$(grep "coda-linux-arm64$"  checksums.txt | awk '{print $1}')
+          SHA_LINUX_AMD64=$(grep "coda-linux-amd64$"  checksums.txt | awk '{print $1}')
+
+          cat > Formula/coda.rb << EOF
+          class Coda < Formula
+            desc "Spotify CLI controller — search, play and control your music from the terminal"
+            homepage "https://github.com/sebasusnik/coda"
+            version "$VER"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/sebasusnik/coda/releases/download/v#{version}/coda-darwin-arm64"
+                sha256 "$SHA_DARWIN_ARM64"
+              end
+              on_intel do
+                url "https://github.com/sebasusnik/coda/releases/download/v#{version}/coda-darwin-amd64"
+                sha256 "$SHA_DARWIN_AMD64"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/sebasusnik/coda/releases/download/v#{version}/coda-linux-arm64"
+                sha256 "$SHA_LINUX_ARM64"
+              end
+              on_intel do
+                url "https://github.com/sebasusnik/coda/releases/download/v#{version}/coda-linux-amd64"
+                sha256 "$SHA_LINUX_AMD64"
+              end
+            end
+
+            def install
+              arch = Hardware::CPU.arm? ? "arm64" : "amd64"
+              os = OS.mac? ? "darwin" : "linux"
+              bin.install "coda-\#{os}-\#{arch}" => "coda"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("\#{bin}/coda --version 2>&1")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/coda.rb
+          git commit -m "Update coda to ${{ github.ref_name }}"
+          git push
