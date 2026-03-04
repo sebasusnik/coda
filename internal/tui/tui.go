@@ -780,6 +780,11 @@ func (m model) View() string {
 	}
 	box = boxStyle.Render(content)
 
+	// Player only — no chrome yet
+	if m.height < 15 {
+		return "\n" + box + "\n"
+	}
+
 	// Input line — ':' prefix in command mode, hint in normal mode
 	var inputLine string
 	if m.commandMode {
