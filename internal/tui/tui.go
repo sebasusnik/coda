@@ -60,6 +60,7 @@ type cmdDoneMsg struct{ text string }
 type searchResultsMsg struct {
 	results []searchResult
 	query   string
+	label   string // header label, e.g. "search" or "queue"
 }
 
 // --- search result type ---
@@ -82,15 +83,18 @@ type searchResult struct {
 // --- model ---
 
 type model struct {
-	playback     *client.PlaybackState
-	input        string
-	status       string
-	loading      bool
-	commandMode  bool // true when the user pressed ':' to type a command
-	width        int
-	results      []searchResult
-	resultsQuery string
-	showResults  bool
+	playback      *client.PlaybackState
+	input         string
+	status        string
+	loading       bool
+	commandMode   bool // true when the user pressed ':' to type a command
+	width         int
+	height        int
+	results       []searchResult
+	resultsQuery  string
+	resultsLabel  string // "search" or "queue"
+	showResults   bool
+	resultsOffset int // index of first visible result
 }
 
 func initialModel() model {
@@ -160,6 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 
 	case progressTickMsg:
 		if m.playback != nil && m.playback.IsPlaying {
@@ -191,7 +196,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case searchResultsMsg:
 		m.results = msg.results
 		m.resultsQuery = msg.query
+		m.resultsLabel = msg.label
 		m.showResults = true
+		m.resultsOffset = 0
 		m.status = ""
 
 	case tea.KeyMsg:
@@ -231,19 +238,30 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Results view: number keys play, esc goes back
+	// Results view: number keys play, arrows scroll, esc goes back
 	if m.showResults {
+		visible := resultsVisible(m.height)
 		switch msg.String() {
 		case "esc", "q":
 			m.showResults = false
+			m.resultsOffset = 0
 			m.status = ""
 		case ":":
 			m.commandMode = true
 			m.input = ""
 			m.status = ""
+		case "up", "k":
+			if m.resultsOffset > 0 {
+				m.resultsOffset--
+			}
+		case "down", "j":
+			if m.resultsOffset+visible < len(m.results) {
+				m.resultsOffset++
+			}
 		default:
 			if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
-				idx := int(k[0]-'1')
+				// key 1-9 maps to offset + (key-1)
+				idx := m.resultsOffset + int(k[0]-'1')
 				if idx < len(m.results) {
 					return m, playResult(m.results[idx])
 				}
@@ -313,7 +331,7 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: "spotify:album:" + a.ID,
 				}
 			}
-			return searchResultsMsg{results, query}
+			return searchResultsMsg{results: results, query: query, label: "search"}
 
 		case "playlist":
 			items, err := client.SearchPlaylistsRaw(query)
@@ -329,7 +347,7 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: "spotify:playlist:" + p.ID,
 				}
 			}
-			return searchResultsMsg{results, query}
+			return searchResultsMsg{results: results, query: query, label: "search"}
 
 		default: // tracks
 			items, err := client.SearchTracksRaw(query)
@@ -349,8 +367,38 @@ func doSearch(kind, query string) tea.Cmd {
 					playURI: t.URI,
 				}
 			}
-			return searchResultsMsg{results, query}
+			return searchResultsMsg{results: results, query: query, label: "search"}
 		}
+	}
+}
+
+func fetchQueue() tea.Cmd {
+	return func() tea.Msg {
+		_, queue, err := client.QueueRaw()
+		if err != nil {
+			return cmdDoneMsg{"error: " + err.Error()}
+		}
+		if len(queue) == 0 {
+			return cmdDoneMsg{"queue is empty"}
+		}
+		limit := len(queue)
+		if limit > 9 {
+			limit = 9
+		}
+		results := make([]searchResult, limit)
+		for i, t := range queue[:limit] {
+			artists := make([]string, len(t.Artists))
+			for j, a := range t.Artists {
+				artists[j] = a.Name
+			}
+			results[i] = searchResult{
+				kind:    kindTrack,
+				name:    t.Name,
+				sub:     strings.Join(artists, ", "),
+				playURI: t.URI,
+			}
+		}
+		return searchResultsMsg{results: results, query: "", label: "queue"}
 	}
 }
 
@@ -382,6 +430,10 @@ func execInput(input string) tea.Cmd {
 		return runAction(client.AlbumMode, "playing album")
 	case "radio":
 		return runAction(client.RadioMode, "radio started")
+	case "status":
+		return func() tea.Msg { return cmdDoneMsg{"status is shown in the player"} }
+	case "queue":
+		return fetchQueue()
 	case "search":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
@@ -418,6 +470,17 @@ func execInput(input string) tea.Cmd {
 	}
 }
 
+// resultsVisible returns how many results fit given the terminal height.
+// Layout: 1 blank + box(1 border + 1 pad + 2 header + N*2 results + 1 pad + 1 border)
+// + 1 blank + 1 input + 1 status + 1 blank + 1 help + 1 blank = 11 overhead lines outside results.
+func resultsVisible(termHeight int) int {
+	v := (termHeight - 11) / 2
+	if v < 1 {
+		v = 1
+	}
+	return v
+}
+
 // --- results view ---
 
 func (m model) resultsView() string {
@@ -435,11 +498,32 @@ func (m model) resultsView() string {
 		kindPlaylist: "playlist",
 	}
 
-	header := trackStyle.Render("search") + dim.Render("  ·  "+m.resultsQuery)
+	visible := resultsVisible(m.height)
+	end := m.resultsOffset + visible
+	if end > len(m.results) {
+		end = len(m.results)
+	}
+	page := m.results[m.resultsOffset:end]
 
-	rows := make([]string, 0, len(m.results)*2+2)
+	label := m.resultsLabel
+	if label == "" {
+		label = "search"
+	}
+	suffix := ""
+	if m.resultsQuery != "" {
+		suffix = "  ·  " + m.resultsQuery
+	}
+	if len(m.results) > visible {
+		suffix = fmt.Sprintf("  ·  %s  (%d-%d of %d)", m.resultsQuery, m.resultsOffset+1, end, len(m.results))
+		if m.resultsQuery == "" {
+			suffix = fmt.Sprintf("  (%d-%d of %d)", m.resultsOffset+1, end, len(m.results))
+		}
+	}
+	header := trackStyle.Render(label) + dim.Render(suffix)
+
+	rows := make([]string, 0, len(page)*2+2)
 	rows = append(rows, header, "")
-	for i, r := range m.results {
+	for i, r := range page {
 		num := artistStyle.Render(fmt.Sprintf("%d", i+1))
 		badge := dim.Render(kindLabel[r.kind])
 		maxName := innerWidth - 8
@@ -471,7 +555,11 @@ func (m model) resultsView() string {
 		}
 	}
 
-	help := dim.Render("1-9 play · esc back · : command · q quit")
+	helpStr := "1-9 play · esc back · : command · q quit"
+	if len(m.results) > visible {
+		helpStr = "1-9 play · ↑↓ scroll · esc back · : command · q quit"
+	}
+	help := dim.Render(helpStr)
 	return "\n" + box + "\n\n  " + inputLine + statusLine + "\n\n  " + help + "\n"
 }
 

@@ -1005,6 +1005,33 @@ func SearchPlaylistsRaw(query string) ([]PlaylistItem, error) {
 	return sr.Playlists.Items, nil
 }
 
+// QueueRaw returns the currently playing track and queue without printing.
+func QueueRaw() (Track, []Track, error) {
+	resp, err := makeSpotifyRequest("GET", "/me/player/queue", nil)
+	if err != nil {
+		return Track{}, nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 204 {
+		return Track{}, nil, fmt.Errorf("nothing playing")
+	}
+
+	if resp.StatusCode != 200 {
+		return Track{}, nil, fmt.Errorf("failed to get queue: %s", resp.Status)
+	}
+
+	var result struct {
+		CurrentlyPlaying Track   `json:"currently_playing"`
+		Queue            []Track `json:"queue"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return Track{}, nil, err
+	}
+
+	return result.CurrentlyPlaying, result.Queue, nil
+}
+
 // PlayURI plays a single track by Spotify URI.
 func PlayURI(trackURI string) error {
 	return playTrack(trackURI, device.ResolveDeviceID())
