@@ -27,11 +27,12 @@ type SearchResponse struct {
 }
 
 type Track struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	URI     string `json:"uri"`
-	Artists []Artist `json:"artists"`
-	Album   Album    `json:"album"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	URI        string   `json:"uri"`
+	DurationMs int      `json:"duration_ms"`
+	Artists    []Artist `json:"artists"`
+	Album      Album    `json:"album"`
 }
 
 type Artist struct {
@@ -593,7 +594,7 @@ func savePlaylistResults(results []PlaylistItem) {
 	os.WriteFile(filepath.Join(configDir, "last_search_playlists.json"), data, 0600)
 }
 
-func getPlaybackState() (*PlaybackState, error) {
+func GetPlaybackState() (*PlaybackState, error) {
 	resp, err := makeSpotifyRequest("GET", "/me/player", nil)
 	if err != nil {
 		return nil, err
@@ -641,7 +642,7 @@ func Resume() error {
 }
 
 func Toggle() error {
-	playback, err := getPlaybackState()
+	playback, err := GetPlaybackState()
 	if err != nil {
 		return err
 	}
@@ -693,7 +694,7 @@ func Like() error {
 }
 
 func SetVolume(input string) error {
-	playback, err := getPlaybackState()
+	playback, err := GetPlaybackState()
 	if err != nil {
 		return err
 	}
@@ -740,7 +741,7 @@ func SetVolume(input string) error {
 }
 
 func ToggleShuffle() error {
-	playback, err := getPlaybackState()
+	playback, err := GetPlaybackState()
 	if err != nil {
 		return err
 	}
@@ -770,7 +771,7 @@ func ToggleShuffle() error {
 }
 
 func CycleRepeat() error {
-	playback, err := getPlaybackState()
+	playback, err := GetPlaybackState()
 	if err != nil {
 		return err
 	}

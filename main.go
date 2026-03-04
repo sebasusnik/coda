@@ -9,6 +9,7 @@ import (
 	"github.com/sebasusnik/coda/internal/client"
 	"github.com/sebasusnik/coda/internal/device"
 	"github.com/sebasusnik/coda/internal/setup"
+	"github.com/sebasusnik/coda/internal/tui"
 	"github.com/urfave/cli/v2"
 )
 
@@ -166,6 +167,13 @@ func main() {
 				Usage: "Cycle repeat mode (off → context → track → off)",
 				Action: func(c *cli.Context) error {
 					return client.CycleRepeat()
+				},
+			},
+			{
+				Name:  "ui",
+				Usage: "Start the interactive player UI",
+				Action: func(c *cli.Context) error {
+					return tui.Start()
 				},
 			},
 			{
