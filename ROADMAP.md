@@ -43,8 +43,17 @@ Ideas for future features, roughly ordered by effort.
 - supports scrolling and number-to-play like the search results view
 - endpoint: `GET /me/tracks`
 
+### seek in the TUI
+- `<` / `>` keys (or `:seek <seconds>`) to jump backward/forward in the current track
+- pairs nicely with `coda seek <seconds>` on the CLI
+- endpoint: `PUT /me/player/seek`
+
 ---
 
 ## pick next
 
-`coda add` is probably the best next step — single API call, works as both a CLI command and a TUI command (`:add some song`), and it's something you'd use constantly while the player is running.
+**liked songs browser** — the TUI results view already handles everything, it's just one new command and one API call. `:liked` would feel like a natural part of the player.
+
+**seek** — `<` / `>` in the TUI would make it feel complete as a player, not just a controller.
+
+**shell completions** — makes the CLI feel polished and is mostly free with `urfave/cli`.
