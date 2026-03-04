@@ -714,12 +714,13 @@ func (m model) View() string {
 		progress = pb.Item.DurationMs
 	}
 
-	// State indicator
+	// State indicator — both strings must be the same visible width so the
+	// right-aligned position stays fixed when toggling play/pause.
 	var stateStr string
 	if pb.IsPlaying {
 		stateStr = playStyle.Render("▶ playing")
 	} else {
-		stateStr = pauseStyle.Render("⏸ paused")
+		stateStr = pauseStyle.Render("⏸ paused ") // trailing space matches "▶ playing" width
 	}
 
 	// Shuffle / repeat
