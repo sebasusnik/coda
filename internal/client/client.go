@@ -930,3 +930,108 @@ func SearchPlaylists(query string, playFirst bool) error {
 
 	return nil
 }
+
+// --- raw search + play helpers for the TUI ---
+
+// SearchTracksRaw returns up to 9 track results without printing or caching.
+func SearchTracksRaw(query string) ([]Track, error) {
+	params := url.Values{}
+	params.Set("q", query)
+	params.Set("type", "track")
+	params.Set("limit", "9")
+
+	resp, err := makeSpotifyRequest("GET", "/search?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("spotify API error: %s", resp.Status)
+	}
+
+	var sr SearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return nil, err
+	}
+	return sr.Tracks.Items, nil
+}
+
+// SearchAlbumsRaw returns up to 9 album results without printing or caching.
+func SearchAlbumsRaw(query string) ([]AlbumItem, error) {
+	params := url.Values{}
+	params.Set("q", query)
+	params.Set("type", "album")
+	params.Set("limit", "9")
+
+	resp, err := makeSpotifyRequest("GET", "/search?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("spotify API error: %s", resp.Status)
+	}
+
+	var sr albumSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return nil, err
+	}
+	return sr.Albums.Items, nil
+}
+
+// SearchPlaylistsRaw returns up to 9 playlist results without printing or caching.
+func SearchPlaylistsRaw(query string) ([]PlaylistItem, error) {
+	params := url.Values{}
+	params.Set("q", query)
+	params.Set("type", "playlist")
+	params.Set("limit", "9")
+
+	resp, err := makeSpotifyRequest("GET", "/search?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("spotify API error: %s", resp.Status)
+	}
+
+	var sr playlistSearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
+		return nil, err
+	}
+	return sr.Playlists.Items, nil
+}
+
+// PlayURI plays a single track by Spotify URI.
+func PlayURI(trackURI string) error {
+	return playTrack(trackURI, device.ResolveDeviceID())
+}
+
+// PlayContextURI plays an album or playlist by Spotify context URI.
+func PlayContextURI(contextURI string) error {
+	deviceID := device.ResolveDeviceID()
+	body := map[string]interface{}{"context_uri": contextURI}
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request body: %v", err)
+	}
+	endpoint := "/me/player/play"
+	if deviceID != "" {
+		endpoint += "?device_id=" + deviceID
+	}
+	resp, err := makeSpotifyRequest("PUT", endpoint, jsonBody)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("no active Spotify device found. Run 'coda device setup' first")
+	}
+	if !isSuccess(resp.StatusCode) {
+		return fmt.Errorf("failed to play: %s", resp.Status)
+	}
+	return nil
+}

@@ -57,16 +57,40 @@ type syncTickMsg struct{}
 type playbackMsg struct{ state *client.PlaybackState }
 type errMsg struct{ err error }
 type cmdDoneMsg struct{ text string }
+type searchResultsMsg struct {
+	results []searchResult
+	query   string
+}
+
+// --- search result type ---
+
+type resultKind int
+
+const (
+	kindTrack    resultKind = iota
+	kindAlbum
+	kindPlaylist
+)
+
+type searchResult struct {
+	kind    resultKind
+	name    string
+	sub     string // artist for tracks/albums, owner for playlists
+	playURI string // track URI or context URI (spotify:album:id etc.)
+}
 
 // --- model ---
 
 type model struct {
-	playback    *client.PlaybackState
-	input       string
-	status      string
-	loading     bool
-	commandMode bool // true when the user pressed ':' to type a command
-	width       int
+	playback     *client.PlaybackState
+	input        string
+	status       string
+	loading      bool
+	commandMode  bool // true when the user pressed ':' to type a command
+	width        int
+	results      []searchResult
+	resultsQuery string
+	showResults  bool
 }
 
 func initialModel() model {
@@ -164,6 +188,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Force immediate sync after any action
 		return m, fetchPlayback()
 
+	case searchResultsMsg:
+		m.results = msg.results
+		m.resultsQuery = msg.query
+		m.showResults = true
+		m.status = ""
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -201,6 +231,27 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Results view: number keys play, esc goes back
+	if m.showResults {
+		switch msg.String() {
+		case "esc", "q":
+			m.showResults = false
+			m.status = ""
+		case ":":
+			m.commandMode = true
+			m.input = ""
+			m.status = ""
+		default:
+			if k := msg.String(); len(k) == 1 && k >= "1" && k <= "9" {
+				idx := int(k[0]-'1')
+				if idx < len(m.results) {
+					return m, playResult(m.results[idx])
+				}
+			}
+		}
+		return m, nil
+	}
+
 	// Normal mode: single-key shortcuts
 	switch msg.String() {
 	case "q":
@@ -224,6 +275,83 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func playResult(r searchResult) tea.Cmd {
+	return func() tea.Msg {
+		var err error
+		if r.kind == kindTrack {
+			err = client.PlayURI(r.playURI)
+		} else {
+			err = client.PlayContextURI(r.playURI)
+		}
+		if err != nil {
+			return cmdDoneMsg{"error: " + err.Error()}
+		}
+		return cmdDoneMsg{"playing: " + r.name}
+	}
+}
+
+func doSearch(kind, query string) tea.Cmd {
+	return func() tea.Msg {
+		switch kind {
+		case "album":
+			items, err := client.SearchAlbumsRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			results := make([]searchResult, len(items))
+			for i, a := range items {
+				artists := make([]string, len(a.Artists))
+				for j, ar := range a.Artists {
+					artists[j] = ar.Name
+				}
+				results[i] = searchResult{
+					kind:    kindAlbum,
+					name:    a.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: "spotify:album:" + a.ID,
+				}
+			}
+			return searchResultsMsg{results, query}
+
+		case "playlist":
+			items, err := client.SearchPlaylistsRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			results := make([]searchResult, len(items))
+			for i, p := range items {
+				results[i] = searchResult{
+					kind:    kindPlaylist,
+					name:    p.Name,
+					sub:     p.Owner.DisplayName,
+					playURI: "spotify:playlist:" + p.ID,
+				}
+			}
+			return searchResultsMsg{results, query}
+
+		default: // tracks
+			items, err := client.SearchTracksRaw(query)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			results := make([]searchResult, len(items))
+			for i, t := range items {
+				artists := make([]string, len(t.Artists))
+				for j, ar := range t.Artists {
+					artists[j] = ar.Name
+				}
+				results[i] = searchResult{
+					kind:    kindTrack,
+					name:    t.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: t.URI,
+				}
+			}
+			return searchResultsMsg{results, query}
+		}
+	}
 }
 
 func execInput(input string) tea.Cmd {
@@ -254,6 +382,26 @@ func execInput(input string) tea.Cmd {
 		return runAction(client.AlbumMode, "playing album")
 	case "radio":
 		return runAction(client.RadioMode, "radio started")
+	case "search":
+		if len(parts) < 2 {
+			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
+		}
+		kind := "track"
+		var queryParts []string
+		for _, p := range parts[1:] {
+			switch p {
+			case "-a":
+				kind = "album"
+			case "-pl":
+				kind = "playlist"
+			default:
+				queryParts = append(queryParts, p)
+			}
+		}
+		if len(queryParts) == 0 {
+			return func() tea.Msg { return cmdDoneMsg{"search: query required"} }
+		}
+		return doSearch(kind, strings.Join(queryParts, " "))
 	case "vol":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"vol: argument required (0-100, up, down)"} }
@@ -268,6 +416,63 @@ func execInput(input string) tea.Cmd {
 	default:
 		return func() tea.Msg { return cmdDoneMsg{"unknown: " + parts[0]} }
 	}
+}
+
+// --- results view ---
+
+func (m model) resultsView() string {
+	innerWidth := m.width - 14
+	if innerWidth < 30 {
+		innerWidth = 30
+	}
+	if innerWidth > 80 {
+		innerWidth = 80
+	}
+
+	kindLabel := map[resultKind]string{
+		kindTrack:    "track",
+		kindAlbum:    "album",
+		kindPlaylist: "playlist",
+	}
+
+	header := trackStyle.Render("search") + dim.Render("  ·  "+m.resultsQuery)
+
+	rows := make([]string, 0, len(m.results)*2+2)
+	rows = append(rows, header, "")
+	for i, r := range m.results {
+		num := artistStyle.Render(fmt.Sprintf("%d", i+1))
+		badge := dim.Render(kindLabel[r.kind])
+		maxName := innerWidth - 8
+		name := r.name
+		if len([]rune(name)) > maxName {
+			name = string([]rune(name)[:maxName-1]) + "…"
+		}
+		rows = append(rows,
+			fmt.Sprintf("%s  %s  %s", num, name, badge),
+			"   "+albumStyle.Render(r.sub),
+		)
+	}
+
+	box := boxStyle.Render(strings.Join(rows, "\n"))
+
+	var inputLine string
+	if m.commandMode {
+		inputLine = promptSt.Render(":") + " " + m.input + "▋"
+	} else {
+		inputLine = dim.Render("press : to type a command")
+	}
+
+	statusLine := ""
+	if m.status != "" {
+		if strings.HasPrefix(m.status, "error") {
+			statusLine = "\n  " + errorSt.Render(m.status)
+		} else {
+			statusLine = "\n  " + successSt.Render(m.status)
+		}
+	}
+
+	help := dim.Render("1-9 play · esc back · : command · q quit")
+	return "\n" + box + "\n\n  " + inputLine + statusLine + "\n\n  " + help + "\n"
 }
 
 // --- view ---
@@ -304,6 +509,10 @@ func joinArtists(artists []client.Artist) string {
 }
 
 func (m model) View() string {
+	if m.showResults {
+		return m.resultsView()
+	}
+
 	if m.loading {
 		return "\n  " + dim.Render("connecting...") + "\n"
 	}
