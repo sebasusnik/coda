@@ -714,15 +714,6 @@ func (m model) View() string {
 		progress = pb.Item.DurationMs
 	}
 
-	// Inner content width: terminal width minus box borders (2) + padding (6 each side = 12) = 14
-	innerWidth := m.width - 14
-	if innerWidth < 30 {
-		innerWidth = 30
-	}
-	if innerWidth > 80 {
-		innerWidth = 80
-	}
-
 	// State indicator
 	var stateStr string
 	if pb.IsPlaying {
@@ -746,6 +737,12 @@ func (m model) View() string {
 		repeatStr = dim.Render("repeat: off")
 	}
 
+	// innerWidth grows with the terminal, minimum 30
+	innerWidth := m.width - 14
+	if innerWidth < 30 {
+		innerWidth = 30
+	}
+
 	// Progress bar — leave room for the time string "  0:00 / 0:00"
 	timeStr := fmtMs(progress) + " / " + fmtMs(pb.Item.DurationMs)
 	barWidth := innerWidth - len(timeStr) - 2
@@ -757,9 +754,16 @@ func (m model) View() string {
 
 	compact := m.height > 0 && m.height < 10
 
-	// Track name left, state indicator right-aligned on the same line
-	trackRendered := trackStyle.Render(pb.Item.Name)
-	pad := innerWidth - lipgloss.Width(trackRendered) - lipgloss.Width(stateStr)
+	// Track name left, state indicator right-aligned on the same line.
+	// Truncate the track name if it would crowd out the state indicator.
+	stateWidth := lipgloss.Width(stateStr)
+	maxTrackRunes := innerWidth - stateWidth - 1
+	trackName := pb.Item.Name
+	if maxTrackRunes > 0 && len([]rune(trackName)) > maxTrackRunes {
+		trackName = string([]rune(trackName)[:maxTrackRunes-1]) + "…"
+	}
+	trackRendered := trackStyle.Render(trackName)
+	pad := innerWidth - lipgloss.Width(trackRendered) - stateWidth
 	if pad < 1 {
 		pad = 1
 	}
