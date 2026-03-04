@@ -76,7 +76,7 @@ func main() {
 				Usage: "Resume playback, or play track by number from last search",
 				Action: func(c *cli.Context) error {
 					if c.NArg() == 0 {
-						return client.Resume()
+						return client.SmartResume()
 					}
 					return client.PlayByNumber(c.Args().First())
 				},

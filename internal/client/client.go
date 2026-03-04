@@ -641,6 +641,24 @@ func Resume() error {
 	return nil
 }
 
+// SmartResume resumes playback if something is paused, or plays the most
+// recently played track if nothing is active.
+func SmartResume() error {
+	_, err := GetPlaybackState()
+	if err == nil {
+		return Resume()
+	}
+	// Nothing playing — fall back to most recently played track
+	items, err := RecentlyPlayedRaw(1)
+	if err != nil || len(items) == 0 {
+		return fmt.Errorf("nothing to play")
+	}
+	track := items[0].Track
+	deviceID := device.ResolveDeviceID()
+	ui.Playing(artistNames(track.Artists), track.Name)
+	return playTrack(track.URI, deviceID)
+}
+
 func Toggle() error {
 	playback, err := GetPlaybackState()
 	if err != nil {
