@@ -17,18 +17,37 @@ const (
 	syncTickInterval     = 10 * time.Second
 )
 
-// --- styles ---
+// --- styles — Catppuccin Mocha ---
+// https://github.com/catppuccin/catppuccin
+
+const (
+	cMauve    = "#cba6f7" // purple — track name, progress filled, prompt
+	cLavender = "#b4befe" // blue-purple — artist
+	cGreen    = "#a6e3a1" // green — playing state, success status
+	cRed      = "#f38ba8" // red — error status
+	cPeach    = "#fab387" // orange — paused state
+	cOverlay1 = "#7f849c" // mid-gray — album, secondary text
+	cSurface1 = "#45475a" // dark — progress bar empty, volume empty
+	cSurface2 = "#585b70" // mid-dark — box border
+)
 
 var (
 	boxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
+			BorderForeground(lipgloss.Color(cSurface2)).
 			Padding(1, 3)
 
-	boldCyan  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	boldGreen = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
-	dim       = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	bold      = lipgloss.NewStyle().Bold(true)
+	trackStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cMauve))
+	artistStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cLavender))
+	albumStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
+	playStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cGreen))
+	pauseStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach))
+	barOn       = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
+	barOff      = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface1))
+	dim         = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
+	successSt   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cGreen))
+	errorSt     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cRed))
+	promptSt    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(cMauve))
 )
 
 // --- messages ---
@@ -253,9 +272,10 @@ func execInput(input string) tea.Cmd {
 
 // --- view ---
 
-func progressBar(progress, duration, width int) string {
+// progressBar returns (filled, empty) block counts for the given progress.
+func progressBar(progress, duration, width int) (int, int) {
 	if duration <= 0 || width <= 0 {
-		return strings.Repeat("░", width)
+		return 0, width
 	}
 	filled := int(float64(progress) / float64(duration) * float64(width))
 	if filled < 0 {
@@ -264,7 +284,7 @@ func progressBar(progress, duration, width int) string {
 	if filled > width {
 		filled = width
 	}
-	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+	return filled, width - filled
 }
 
 func fmtMs(ms int) string {
@@ -310,17 +330,27 @@ func (m model) View() string {
 	}
 
 	// State indicator
-	stateStr := dim.Render("⏸ paused")
+	var stateStr string
 	if pb.IsPlaying {
-		stateStr = boldGreen.Render("▶ playing")
+		stateStr = playStyle.Render("▶ playing")
+	} else {
+		stateStr = pauseStyle.Render("⏸ paused")
 	}
 
 	// Shuffle / repeat
-	shuffleStr := "shuffle off"
+	shuffleStr := dim.Render("shuffle off")
 	if pb.ShuffleState {
-		shuffleStr = "shuffle on"
+		shuffleStr = artistStyle.Render("shuffle on")
 	}
-	repeatStr := "repeat: " + pb.RepeatState
+	var repeatStr string
+	switch pb.RepeatState {
+	case "track":
+		repeatStr = artistStyle.Render("repeat: track")
+	case "context":
+		repeatStr = artistStyle.Render("repeat: context")
+	default:
+		repeatStr = dim.Render("repeat: off")
+	}
 
 	// Progress bar — leave room for the time string "  0:00 / 0:00"
 	timeStr := fmtMs(progress) + " / " + fmtMs(pb.Item.DurationMs)
@@ -328,14 +358,16 @@ func (m model) View() string {
 	if barWidth < 4 {
 		barWidth = 4
 	}
-	bar := progressBar(progress, pb.Item.DurationMs, barWidth)
+	filled, empty := progressBar(progress, pb.Item.DurationMs, barWidth)
+	bar := barOn.Render(strings.Repeat("█", filled)) + barOff.Render(strings.Repeat("░", empty))
 
 	content := strings.Join([]string{
-		boldCyan.Render(joinArtists(pb.Item.Artists)) + bold.Render("  —  "+pb.Item.Name),
-		dim.Render(pb.Item.Album.Name) + "   " + stateStr,
+		trackStyle.Render(pb.Item.Name),
+		artistStyle.Render(joinArtists(pb.Item.Artists)) + "  " + albumStyle.Render("· "+pb.Item.Album.Name),
+		stateStr,
 		"",
 		bar + "  " + dim.Render(timeStr),
-		dim.Render(fmt.Sprintf("vol %d  ·  %s  ·  %s", pb.Device.Volume, shuffleStr, repeatStr)),
+		dim.Render(fmt.Sprintf("vol %d", pb.Device.Volume)) + "  ·  " + shuffleStr + "  ·  " + repeatStr,
 	}, "\n")
 
 	box := boxStyle.Render(content)
@@ -343,7 +375,7 @@ func (m model) View() string {
 	// Input line — ':' prefix in command mode, hint in normal mode
 	var inputLine string
 	if m.commandMode {
-		inputLine = boldGreen.Render(":") + " " + m.input + "▋"
+		inputLine = promptSt.Render(":") + " " + m.input + "▋"
 	} else {
 		inputLine = dim.Render("press : to type a command")
 	}
@@ -351,7 +383,11 @@ func (m model) View() string {
 	// Status line (only shown when non-empty)
 	statusLine := ""
 	if m.status != "" {
-		statusLine = "\n  " + dim.Render(m.status)
+		if strings.HasPrefix(m.status, "error") {
+			statusLine = "\n  " + errorSt.Render(m.status)
+		} else {
+			statusLine = "\n  " + successSt.Render(m.status)
+		}
 	}
 
 	help := dim.Render("spc toggle · n next · p prev · l like · s shuffle · r repeat · : command · q quit")
