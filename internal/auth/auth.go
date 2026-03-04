@@ -20,14 +20,26 @@ const (
 	redirectURI = "http://127.0.0.1:8080/callback"
 )
 
+// Set at build time via -ldflags
+var (
+	DefaultClientID     string
+	DefaultClientSecret string
+)
+
 var (
 	oauthConfig *oauth2.Config
 	state       string
 )
 
 func init() {
-	clientID := os.Getenv("CODA_CLIENT_ID")
-	clientSecret := os.Getenv("CODA_CLIENT_SECRET")
+	clientID := DefaultClientID
+	clientSecret := DefaultClientSecret
+	if ev := os.Getenv("CODA_CLIENT_ID"); ev != "" {
+		clientID = ev
+	}
+	if ev := os.Getenv("CODA_CLIENT_SECRET"); ev != "" {
+		clientSecret = ev
+	}
 	if clientID == "" || clientSecret == "" {
 		if cfg, err := config.Load(); err == nil {
 			if clientID == "" {

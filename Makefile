@@ -5,7 +5,8 @@ VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 
-LDFLAGS := -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}"
+AUTH_PKG := github.com/sebasusnik/coda/internal/auth
+LDFLAGS := -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME} -X ${AUTH_PKG}.DefaultClientID=${CODA_CLIENT_ID} -X ${AUTH_PKG}.DefaultClientSecret=${CODA_CLIENT_SECRET}"
 
 .PHONY: build clean install test cross-compile help
 

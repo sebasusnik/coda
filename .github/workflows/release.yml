@@ -22,6 +22,9 @@ jobs:
           go-version-file: go.mod
 
       - name: Build binaries
+        env:
+          CODA_CLIENT_ID: ${{ secrets.CODA_CLIENT_ID }}
+          CODA_CLIENT_SECRET: ${{ secrets.CODA_CLIENT_SECRET }}
         run: make cross-compile
 
       - name: Generate checksums
