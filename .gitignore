@@ -41,6 +41,7 @@ Thumbs.db
 # Config files (contains secrets)
 config/
 *.json
+.env
 
 # Logs
 *.log
