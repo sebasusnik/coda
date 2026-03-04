@@ -138,6 +138,13 @@ func main() {
 				},
 			},
 			{
+				Name:  "recent",
+				Usage: "Show recently played tracks",
+				Action: func(c *cli.Context) error {
+					return client.RecentlyPlayed()
+				},
+			},
+			{
 				Name:      "add",
 				Usage:     "Add a track to the queue",
 				ArgsUsage: "<query>",

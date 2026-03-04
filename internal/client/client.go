@@ -1005,6 +1005,51 @@ func SearchPlaylistsRaw(query string) ([]PlaylistItem, error) {
 	return sr.Playlists.Items, nil
 }
 
+type RecentlyPlayedItem struct {
+	Track    Track  `json:"track"`
+	PlayedAt string `json:"played_at"`
+}
+
+type recentlyPlayedResponse struct {
+	Items []RecentlyPlayedItem `json:"items"`
+}
+
+// RecentlyPlayedRaw returns recently played tracks without printing.
+func RecentlyPlayedRaw(limit int) ([]RecentlyPlayedItem, error) {
+	resp, err := makeSpotifyRequest("GET", fmt.Sprintf("/me/player/recently-played?limit=%d", limit), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get recently played: %s", resp.Status)
+	}
+
+	var result recentlyPlayedResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Items, nil
+}
+
+// RecentlyPlayed prints the last 10 recently played tracks.
+func RecentlyPlayed() error {
+	items, err := RecentlyPlayedRaw(10)
+	if err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		ui.Info("no recently played tracks")
+		return nil
+	}
+	ui.Header(fmt.Sprintf("recently played (%d)", len(items)))
+	for i, item := range items {
+		ui.Track(i+1, artistNames(item.Track.Artists), item.Track.Name, item.Track.Album.Name)
+	}
+	return nil
+}
+
 // AddToQueue adds a track URI to the user's playback queue.
 func AddToQueue(trackURI string) error {
 	endpoint := "/me/player/queue?uri=" + url.QueryEscape(trackURI)

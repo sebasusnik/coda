@@ -449,6 +449,30 @@ func execInput(input string) tea.Cmd {
 		return func() tea.Msg { return cmdDoneMsg{"status is shown in the player"} }
 	case "queue":
 		return fetchQueue()
+	case "recent":
+		return func() tea.Msg {
+			items, err := client.RecentlyPlayedRaw(9)
+			if err != nil {
+				return cmdDoneMsg{"error: " + err.Error()}
+			}
+			if len(items) == 0 {
+				return cmdDoneMsg{"no recently played tracks"}
+			}
+			results := make([]searchResult, len(items))
+			for i, item := range items {
+				artists := make([]string, len(item.Track.Artists))
+				for j, a := range item.Track.Artists {
+					artists[j] = a.Name
+				}
+				results[i] = searchResult{
+					kind:    kindTrack,
+					name:    item.Track.Name,
+					sub:     strings.Join(artists, ", "),
+					playURI: item.Track.URI,
+				}
+			}
+			return searchResultsMsg{results: results, query: "", label: "recent", mode: "play"}
+		}
 	case "add":
 		if len(parts) < 2 {
 			return func() tea.Msg { return cmdDoneMsg{"add: query required"} }
