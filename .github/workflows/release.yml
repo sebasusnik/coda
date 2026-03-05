@@ -82,7 +82,7 @@ jobs:
             license "MIT"
 
             resource "zsh-completion" do
-              url "https://github.com/sebasusnik/coda/releases/download/v#{version}/_coda"
+              url "https://github.com/sebasusnik/coda/releases/download/v$VER/_coda"
               sha256 "$SHA_ZSH_COMP"
             end
 
