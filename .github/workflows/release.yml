@@ -27,8 +27,11 @@ jobs:
           CODA_CLIENT_SECRET: ${{ secrets.CODA_CLIENT_SECRET }}
         run: make cross-compile
 
+      - name: Generate zsh completion
+        run: ./coda-linux-amd64 completion zsh > _coda
+
       - name: Generate checksums
-        run: sha256sum coda-* > checksums.txt
+        run: sha256sum coda-* _coda > checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -40,6 +43,7 @@ jobs:
             coda-darwin-amd64
             coda-darwin-arm64
             coda-windows-amd64.exe
+            _coda
             checksums.txt
 
   update-homebrew:
@@ -68,6 +72,7 @@ jobs:
           SHA_DARWIN_AMD64=$(grep "coda-darwin-amd64$" checksums.txt | awk '{print $1}')
           SHA_LINUX_ARM64=$(grep "coda-linux-arm64$"  checksums.txt | awk '{print $1}')
           SHA_LINUX_AMD64=$(grep "coda-linux-amd64$"  checksums.txt | awk '{print $1}')
+          SHA_ZSH_COMP=$(grep "_coda$"               checksums.txt | awk '{print $1}')
 
           cat > Formula/coda.rb << EOF
           class Coda < Formula
@@ -75,6 +80,11 @@ jobs:
             homepage "https://github.com/sebasusnik/coda"
             version "$VER"
             license "MIT"
+
+            resource "zsh-completion" do
+              url "https://github.com/sebasusnik/coda/releases/download/v#{version}/_coda"
+              sha256 "$SHA_ZSH_COMP"
+            end
 
             on_macos do
               on_arm do
@@ -102,9 +112,7 @@ jobs:
               arch = Hardware::CPU.arm? ? "arm64" : "amd64"
               os = OS.mac? ? "darwin" : "linux"
               bin.install "coda-#{os}-#{arch}" => "coda"
-              (zsh_completion/"_coda").write Utils.safe_popen_read(bin/"coda", "completion", "zsh")
-              (bash_completion/"coda").write Utils.safe_popen_read(bin/"coda", "completion", "bash")
-              (fish_completion/"coda.fish").write Utils.safe_popen_read(bin/"coda", "completion", "fish")
+              resource("zsh-completion").stage { zsh_completion.install "_coda" }
             end
 
             test do
