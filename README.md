@@ -16,30 +16,40 @@ A Spotify CLI controller. Search, play and control your music from the terminal 
 
 ## Installation
 
-### 1. Clone and build
+### Option A — go install
+
+If you have Go 1.21+ installed:
+
+```bash
+go install github.com/sebasusnik/coda@latest
+```
+
+The binary lands in `$GOPATH/bin` (usually `~/go/bin`). Make sure that directory is on your `PATH`.
+
+### Option B — Homebrew (macOS / Linux)
+
+```bash
+brew tap sebasusnik/tap
+brew install coda
+```
+
+### Option C — Build from source
 
 ```bash
 git clone https://github.com/sebasusnik/coda
 cd coda
 go build -o coda .
+sudo mv coda /usr/local/bin/
 ```
 
-### 2. Install globally
-
-```bash
-./coda install
-```
-
-This copies the binary to `/usr/local/bin` so you can run `coda` from anywhere. If it needs elevated permissions it will ask for your password via `sudo`.
-
-### 3. Set up your Spotify app
+### Set up your Spotify app
 
 1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
 2. Create a new app
 3. Under **Redirect URIs** add `http://127.0.0.1:8080/callback`
 4. Copy your **Client ID** and **Client Secret**
 
-### 4. Configure credentials
+### Configure credentials
 
 Create a `.env` file at the project root:
 
@@ -50,7 +60,7 @@ CODA_CLIENT_SECRET=your_client_secret_here
 
 Or export them in your shell — coda will fall back to `~/.config/coda/config.json` after the first auth.
 
-### 5. Authenticate
+### Authenticate
 
 ```bash
 coda auth
@@ -59,7 +69,7 @@ coda auth
 coda auth --headless
 ```
 
-### 6. Set up a playback device
+### Set up a playback device
 
 ```bash
 coda device setup

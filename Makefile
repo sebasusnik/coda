@@ -8,7 +8,7 @@ BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 AUTH_PKG := github.com/sebasusnik/coda/internal/auth
 LDFLAGS := -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME} -X ${AUTH_PKG}.DefaultClientID=${CODA_CLIENT_ID} -X ${AUTH_PKG}.DefaultClientSecret=${CODA_CLIENT_SECRET}"
 
-.PHONY: build clean install test cross-compile help
+.PHONY: build clean install test cross-compile dev dev-tui help
 
 ## build: Build the application
 build:
@@ -43,6 +43,10 @@ cross-compile:
 ## dev: Run the application with go run
 dev:
 	go run ${LDFLAGS} . $(ARGS)
+
+## dev-tui: Build locally, set up device, and launch tui for local testing
+dev-tui:
+	go build ${LDFLAGS} -o ${APP_NAME} . && ./${APP_NAME} device setup && ./${APP_NAME} ui
 
 ## tidy: Tidy go modules
 tidy:
