@@ -288,9 +288,89 @@ func main() {
 						Name:  "zsh",
 						Usage: "Print zsh completion setup",
 						Action: func(c *cli.Context) error {
-							fmt.Println("# Add to ~/.zshrc:")
-							fmt.Println("autoload -U +X bashcompinit && bashcompinit")
-							fmt.Println("complete -o nospace -C coda coda")
+							fmt.Print(`#compdef coda
+
+_coda() {
+  local state
+
+  _arguments \
+    '1: :->command' \
+    '*: :->args'
+
+  case $state in
+    command)
+      local commands=(
+        'auth:Authenticate with Spotify'
+        'search:Search for tracks, albums, or playlists'
+        'play:Resume playback or play track by number'
+        'pause:Pause playback'
+        'toggle:Toggle play/pause'
+        'next:Skip to next track'
+        'prev:Go to previous track'
+        'status:Show current playback status'
+        'queue:Show the current playback queue'
+        'recent:Show recently played tracks'
+        'liked:Show your liked/saved tracks'
+        'add:Add a track to the queue'
+        'addto:Add the current track to a playlist'
+        'like:Like the currently playing track'
+        'vol:Set volume (0-100, up, down)'
+        'seek:Seek to a position in the current track'
+        'shuffle:Toggle shuffle'
+        'repeat:Cycle repeat mode'
+        'radio:Start radio mode based on current track'
+        'album:Play entire album of current track'
+        'ui:Start the interactive player UI'
+        'start:Start the librespot service'
+        'stop:Stop the librespot service'
+        'device:Device management'
+        'completion:Print shell completion script'
+        'install:Install coda to /usr/local/bin'
+      )
+      _describe 'command' commands
+      ;;
+    args)
+      case $words[2] in
+        auth)
+          _arguments \
+            '--headless[Use headless authentication]' \
+            '--force[Force re-authentication]' \
+            '-f[Force re-authentication]'
+          ;;
+        search)
+          _arguments \
+            '--play[Play the first result immediately]' \
+            '-p[Play the first result immediately]' \
+            '--a[Search albums instead of tracks]' \
+            '--pl[Search playlists instead of tracks]'
+          ;;
+        vol)
+          local vol_args=('up:Increase volume' 'down:Decrease volume')
+          _describe 'volume' vol_args
+          ;;
+        device)
+          local device_cmds=(
+            'setup:Install librespot and register this machine'
+            'list:List all available Spotify Connect devices'
+            'use:Set the preferred Spotify Connect device'
+          )
+          _describe 'device command' device_cmds
+          ;;
+        completion)
+          local completion_cmds=(
+            'bash:Print bash completion setup'
+            'zsh:Print zsh completion setup'
+            'fish:Print fish completion setup'
+          )
+          _describe 'shell' completion_cmds
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_coda "$@"
+`)
 							return nil
 						},
 					},
