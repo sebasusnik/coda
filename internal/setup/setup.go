@@ -1,14 +1,11 @@
 package setup
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 
 	"github.com/sebasusnik/coda/internal/auth"
@@ -25,12 +22,7 @@ func Run() error {
 	ui.Info("this will install librespot on your machine and register it as a Spotify Connect device")
 	fmt.Println()
 
-	cfg, err := promptSetupConfig()
-	if err != nil {
-		return err
-	}
-
-	fmt.Println()
+	cfg := &SetupConfig{DeviceName: "coda"}
 
 	// 1. Install librespot
 	binaryPath, err := installLibrespot()
@@ -89,97 +81,14 @@ func waitAndSaveDevice(name string) error {
 	}
 }
 
-func promptSetupConfig() (*SetupConfig, error) {
-	reader := bufio.NewReader(os.Stdin)
-
-	defaultName := defaultDeviceName()
-	fmt.Printf("  Device name (default: %s): ", defaultName)
-	name, _ := reader.ReadString('\n')
-	name = strings.TrimSpace(name)
-	if name == "" {
-		name = defaultName
-	}
-
-	return &SetupConfig{
-		DeviceName: name,
-	}, nil
-}
-
-func defaultDeviceName() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "coda"
-	}
-	return strings.TrimSuffix(hostname, ".local")
-}
-
 // installLibrespot installs librespot using the best available method for the
 // current platform and returns the path to the installed binary.
 func installLibrespot() (string, error) {
-	// Check if already installed
 	if path, err := exec.LookPath("librespot"); err == nil {
 		ui.Infof("librespot already installed at %s, skipping", path)
 		return path, nil
 	}
-
-	switch runtime.GOOS {
-	case "darwin":
-		return installMac()
-	case "linux":
-		return installLinux()
-	default:
-		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-}
-
-func installMac() (string, error) {
-	// Try Homebrew first
-	if _, err := exec.LookPath("brew"); err == nil {
-		ui.Info("installing via Homebrew...")
-		cmd := exec.Command("brew", "install", "librespot")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("brew install failed: %v", err)
-		}
-		return exec.LookPath("librespot")
-	}
-	return installViaCargo()
-}
-
-func installLinux() (string, error) {
-	// Try apt (Debian/Ubuntu/Raspberry Pi OS)
-	if _, err := exec.LookPath("apt-get"); err == nil {
-		ui.Info("installing via apt...")
-		update := exec.Command("sudo", "apt-get", "update", "-qq")
-		update.Stdout = os.Stdout
-		update.Stderr = os.Stderr
-		update.Run() // non-fatal
-
-		cmd := exec.Command("sudo", "apt-get", "install", "-y", "librespot")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			ui.Info("apt install failed, falling back to cargo...")
-			return installViaCargo()
-		}
-		return exec.LookPath("librespot")
-	}
-
-	// Try dnf (Fedora)
-	if _, err := exec.LookPath("dnf"); err == nil {
-		ui.Info("installing via dnf...")
-		cmd := exec.Command("sudo", "dnf", "install", "-y", "librespot")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			ui.Info("dnf install failed, falling back to cargo...")
-			return installViaCargo()
-		}
-		return exec.LookPath("librespot")
-	}
-
-	return installViaCargo()
+	return platformInstall()
 }
 
 func installViaCargo() (string, error) {
@@ -216,138 +125,11 @@ func cacheDir() string {
 }
 
 func installService(binaryPath string, cfg *SetupConfig, token string) error {
-	switch runtime.GOOS {
-	case "darwin":
-		return installLaunchdService(binaryPath, cfg, token)
-	case "linux":
-		return installSystemdService(binaryPath, cfg, token)
-	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
+	return platformInstallService(binaryPath, cfg, token)
 }
 
 func startService() error {
-	switch runtime.GOOS {
-	case "darwin":
-		return startLaunchdService()
-	case "linux":
-		return startSystemdService()
-	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-}
-
-func installLaunchdService(binaryPath string, cfg *SetupConfig, token string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	launchAgentsDir := filepath.Join(homeDir, "Library", "LaunchAgents")
-	if err := os.MkdirAll(launchAgentsDir, 0755); err != nil {
-		return err
-	}
-
-	cache := cacheDir()
-	if err := os.MkdirAll(cache, 0700); err != nil {
-		return err
-	}
-
-	plist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>Label</key>
-	<string>com.coda.librespot</string>
-	<key>ProgramArguments</key>
-	<array>
-		<string>%s</string>
-		<string>--name</string>
-		<string>%s</string>
-		<string>--access-token</string>
-		<string>%s</string>
-		<string>--cache</string>
-		<string>%s</string>
-		<string>--disable-audio-cache</string>
-	</array>
-	<key>RunAtLoad</key>
-	<true/>
-	<key>KeepAlive</key>
-	<true/>
-	<key>StandardOutPath</key>
-	<string>%s/Library/Logs/coda-librespot.log</string>
-	<key>StandardErrorPath</key>
-	<string>%s/Library/Logs/coda-librespot.error.log</string>
-</dict>
-</plist>`, binaryPath, cfg.DeviceName, token, cache, homeDir, homeDir)
-
-	plistPath := filepath.Join(launchAgentsDir, "com.coda.librespot.plist")
-	// 0600 — access token is stored in this file
-	return os.WriteFile(plistPath, []byte(plist), 0600)
-}
-
-func startLaunchdService() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.coda.librespot.plist")
-
-	// Unload first in case it was previously installed
-	exec.Command("launchctl", "unload", plistPath).Run()
-
-	cmd := exec.Command("launchctl", "load", plistPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("launchctl load failed: %v -- %s", err, out)
-	}
-	return nil
-}
-
-func installSystemdService(binaryPath string, cfg *SetupConfig, token string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	cache := cacheDir()
-	if err := os.MkdirAll(cache, 0700); err != nil {
-		return err
-	}
-
-	systemdDir := filepath.Join(homeDir, ".config", "systemd", "user")
-	if err := os.MkdirAll(systemdDir, 0755); err != nil {
-		return err
-	}
-
-	service := fmt.Sprintf(`[Unit]
-Description=Coda librespot (Spotify Connect)
-After=network.target sound.target
-
-[Service]
-Type=simple
-ExecStart=%s --name "%s" --access-token "%s" --cache "%s" --disable-audio-cache
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=default.target`, binaryPath, cfg.DeviceName, token, cache)
-
-	servicePath := filepath.Join(systemdDir, "coda-librespot.service")
-	// 0600 — access token is stored in this file
-	if err := os.WriteFile(servicePath, []byte(service), 0600); err != nil {
-		return err
-	}
-
-	exec.Command("systemctl", "--user", "daemon-reload").Run()
-	return nil
-}
-
-func startSystemdService() error {
-	cmd := exec.Command("systemctl", "--user", "enable", "--now", "coda-librespot.service")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("systemctl failed: %v -- %s", err, out)
-	}
-	return nil
+	return platformStartService()
 }
 
 func Start() error {
@@ -359,34 +141,8 @@ func Start() error {
 }
 
 func Stop() error {
-	switch runtime.GOOS {
-	case "darwin":
-		return stopLaunchdService()
-	case "linux":
-		return stopSystemdService()
-	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
-	}
-}
-
-func stopLaunchdService() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
+	if err := platformStop(); err != nil {
 		return err
-	}
-	plistPath := filepath.Join(homeDir, "Library", "LaunchAgents", "com.coda.librespot.plist")
-	cmd := exec.Command("launchctl", "unload", plistPath)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("launchctl unload failed: %v -- %s", err, out)
-	}
-	ui.Success("service stopped")
-	return nil
-}
-
-func stopSystemdService() error {
-	cmd := exec.Command("systemctl", "--user", "stop", "coda-librespot.service")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("systemctl stop failed: %v -- %s", err, out)
 	}
 	ui.Success("service stopped")
 	return nil
@@ -418,14 +174,16 @@ func copyFile(src, dest string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, in)
-	return err
+	if _, err = io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }

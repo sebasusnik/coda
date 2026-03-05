@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>coda — connected</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #121212;
+      color: #fff;
+      font-family: 'Circular', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .glow {
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(29,185,84,0.12) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .card {
+      position: relative;
+      text-align: center;
+      padding: 0 2rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .spotify-logo {
+      margin-bottom: 2.5rem;
+      opacity: 0.9;
+    }
+
+    .check-wrap {
+      margin-bottom: 2rem;
+    }
+
+    .check-wrap svg {
+      width: 56px;
+      height: 56px;
+      stroke: #1db954;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .check-path {
+      stroke-dasharray: 60;
+      stroke-dashoffset: 60;
+      animation: draw 0.5s ease 0.3s forwards;
+    }
+
+    @keyframes draw {
+      to { stroke-dashoffset: 0; }
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.6rem;
+    }
+
+    .sub {
+      font-size: 0.95rem;
+      color: #a7a7a7;
+      margin-bottom: 2.5rem;
+    }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.75rem;
+      color: #6a6a6a;
+      border: 1px solid #2a2a2a;
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      letter-spacing: 0.02em;
+    }
+  </style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="card">
+    <div class="spotify-logo">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="#1db954" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.623.623 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.623.623 0 01-.277-1.215c3.809-.87 7.077-.496 9.712 1.115a.623.623 0 01.207.857zm1.223-2.722a.78.78 0 01-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 01-.973-.519.781.781 0 01.52-.972c3.632-1.102 8.147-.568 11.233 1.328a.78.78 0 01.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71a.937.937 0 11-.543-1.793c3.532-1.072 9.404-.865 13.115 1.338a.937.937 0 01-.955 1.612z"/>
+      </svg>
+    </div>
+
+    <div class="check-wrap">
+      <svg viewBox="0 0 24 24">
+        <polyline class="check-path" points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+
+    <h1>You're all set!</h1>
+    <p class="sub">Your Spotify account is connected to coda.</p>
+    <span class="pill">You can close this window</span>
+  </div>
+</body>
+</html>

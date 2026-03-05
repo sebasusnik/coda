@@ -1,0 +1,10 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # defer resp.Body.Close() is idiomatic Go — the error cannot be meaningfully
+      # handled after the body has already been read, so we suppress it here.
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
