@@ -102,6 +102,9 @@ jobs:
               arch = Hardware::CPU.arm? ? "arm64" : "amd64"
               os = OS.mac? ? "darwin" : "linux"
               bin.install "coda-#{os}-#{arch}" => "coda"
+              (zsh_completion/"_coda").write Utils.safe_popen_read(bin/"coda", "completion", "zsh")
+              (bash_completion/"coda").write Utils.safe_popen_read(bin/"coda", "completion", "bash")
+              (fish_completion/"coda.fish").write Utils.safe_popen_read(bin/"coda", "completion", "fish")
             end
 
             test do
